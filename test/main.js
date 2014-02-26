@@ -13,9 +13,9 @@ var pagination = require('../');
 
 describe('assemble-contrib-pagination', function() {
 
-	before(function(){
-		// run any code before tests here
-	});
+  before(function(){
+    // run any code before tests here
+  });
 
   it('should do something awesome', function() {
     var expected = 'assemble-contrib-pagination';
