@@ -7,14 +7,29 @@
  * Licensed under the MIT license.
  */
 
+// node_modules
 var matter = require('gray-matter');
 var file = require('fs-utils');
 var path = require('path');
 var _ = require('lodash');
 
+// local libs
+var Item = require('./lib/item');
+var Page = require('./lib/page');
+var Collection = require('./lib/collection');
 
 var options = {
   stage: 'options:post:configuration'
+};
+
+var generatePagePath = function (dest, index) {
+  var result = '';
+  if (index === 1) {
+    result = path.join(dest, 'index.html');
+  } else {
+    result = path.join(dest, String(index), 'index.html');
+  }
+  return file.normalizeSlash(result);
 };
 
 module.exports = function(params, done) {
@@ -43,12 +58,15 @@ module.exports = function(params, done) {
    */
   if (opts) {
 
+    // extend the options with some defaults
     opts = _.extend({
       dest: '.',
       structure: ':num/index:ext',
       per_page: 10
     }, opts);
 
+
+    // setup a default template if none is specified
     var template = [
 
       '<a href="{{page.pagination.previous_page_path}}">Previous</a> | <a href="{{page.pagination.next_page_path}}">Next</a>',
@@ -59,78 +77,80 @@ module.exports = function(params, done) {
 
     ].join('\n');
 
+    // read in the template if one is specified
     grunt.verbose.writeln('Template: '.bold, opts.template);
     if (opts.template && opts.template.length > 0) {
       template = file.readFileSync(opts.template);
     }
 
+    // Expand given filepaths of the items/pages/posts/etc...
     grunt.verbose.writeln('Source: '.bold, opts.src);
-    // Expand given filepaths
     var filepaths = file.expand(opts.src || '');
-    var total = filepaths.length;
-    var per_page = opts.per_page;
-    var total_pages = Math.round(total/per_page);
 
-    var currentItem = 0;
-    var currentPage = 1;
-    var prevPage = 1;
-    var nextPage = 2;
+    // setup the state
+    var state = {
+      // item info
+      currentItemIndex: 0,
+      totalItems: filepaths.length,
+      // page info
+      perPage: opts.per_page,
+      currentPageIndex: 1,
+      prevPageIndex: 1
+    };
+    state.totalPages = Math.round(state.totalItems / state.perPage);
+    state.nextPageIndex = Math.min(2, state.totalPages);
 
-    var pages = {};
-    var items = [];
-
-    _.each(filepaths, function (filepath, index) {
-
+    // load all the items/pages/posts/etc..
+    var items = _.map(filepaths, function (filepath, index) {
       grunt.verbose.writeln('Filepath: '.bold, filepath);
-      var item = file.readFileSync(filepath);
-      var itemObj = matter(item);
-
-      var context = _.extend({}, itemObj.context);
-      context.src = filepath;
-
-      items.push({
+      var content = file.readFileSync(filepath);
+      var info = matter(content);
+      return new Item({
         filename: filepath,
-        content: itemObj.content,
-        data: context
+        src: filepath,
+        content: info.content,
+        data: _.extend({src: filepath}, info.context)
       });
-
     });
 
-    var makePage = function(name) {
-      return {
-        filename: name,
-        content: template,
-        data: {
-          pagination: {
-            items: []
-          }
-        }
-      };
-    };
+    // collection is a convenience for getting items out later
+    var collection = new Collection({items: items});
 
+    // generate each list page based on how many items there are
+    var pages = {};
     do {
 
-      var page = makePage(path.join(opts.dest, String(currentPage), 'index.html'));
+      // create a new page from the template with the items in the context
+      var page = new Page({
+        filename: generatePagePath(opts.dest, state.currentPageIndex),
+        content: template,
+        context: {
+          pagination: {
+            page: state.currentPageIndex,
+            per_page: state.perPage,
+            items: collection.getItems(state.currentItemIndex, state.perPage),
+            total_items: state.totalItems,
+            total_pages: state.totalPages,
+            previous_page: state.prevPageIndex,
+            previous_page_path: generatePagePath(opts.dest, state.prevPageIndex),
+            next_page: state.nextPageIndex,
+            next_page_path: generatePagePath(opts.dest, state.nextPageIndex)
+          }
+        }
+      });
 
-      page.data.pagination.page = currentPage;
-      page.data.pagination.per_page = per_page;
-      page.data.pagination.items = items.slice(currentItem, Math.min(total, currentItem + per_page));
-      page.data.pagination.total_items = total;
-      page.data.pagination.total_pages = total_pages;
-      page.data.pagination.previous_page = prevPage;
-      page.data.pagination.previous_page_path = path.join(opts.dest, String(prevPage), 'index.html');
-      page.data.pagination.next_page = nextPage;
-      page.data.pagination.next_page_path = path.join(opts.dest, String(nextPage), 'index.html');
 
       pages[page.filename] = page;
 
-      currentPage++;
-      prevPage = currentPage - 1;
-      nextPage = currentPage + (currentPage === total_pages ? 0 : 1);
-      currentItem += per_page;
+      // update state information
+      state.currentPageIndex++;
+      state.prevPageIndex = state.currentPageIndex - 1;
+      state.nextPageIndex = state.currentPageIndex + (state.currentPageIndex === state.totalPages ? 0 : 1);
+      state.currentItemIndex += state.perPage;
 
-    } while (currentPage <= total_pages);
+    } while (state.currentPageIndex <= state.totalPages);
 
+    // add the new pages to the assemble.options.pages collection
     grunt.verbose.writeln('Pages: '.bold, require('util').inspect(pages));
     params.assemble.options.pages = _.extend({}, (params.assemble.options.pages || {}), pages);
 
