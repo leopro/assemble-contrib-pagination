@@ -10,26 +10,15 @@
 // node_modules
 var matter = require('gray-matter');
 var file = require('fs-utils');
-var path = require('path');
 var _ = require('lodash');
 
 // local libs
-var Item = require('./lib/item');
+var utils = require('./lib/utils');
 var Page = require('./lib/page');
 var Collection = require('./lib/collection');
 
 var options = {
   stage: 'options:post:configuration'
-};
-
-var generatePagePath = function (dest, index) {
-  var result = '';
-  if (index === 1) {
-    result = path.join(dest, 'index.html');
-  } else {
-    result = path.join(dest, String(index), 'index.html');
-  }
-  return file.normalizeSlash(result);
 };
 
 module.exports = function(params, done) {
@@ -85,13 +74,16 @@ module.exports = function(params, done) {
 
     // Expand given filepaths of the items/pages/posts/etc...
     grunt.verbose.writeln('Source: '.bold, opts.src);
-    var filepaths = file.expand(opts.src || '');
+    var items = utils.loadItems(opts.src || '');
+
+    // collection is a convenience for getting items out later
+    var collection = new Collection({items: items});
 
     // setup the state
     var state = {
       // item info
       currentItemIndex: 0,
-      totalItems: filepaths.length,
+      totalItems: items.length,
       // page info
       perPage: opts.per_page,
       currentPageIndex: 1,
@@ -100,29 +92,13 @@ module.exports = function(params, done) {
     state.totalPages = Math.round(state.totalItems / state.perPage);
     state.nextPageIndex = Math.min(2, state.totalPages);
 
-    // load all the items/pages/posts/etc..
-    var items = _.map(filepaths, function (filepath, index) {
-      grunt.verbose.writeln('Filepath: '.bold, filepath);
-      var content = file.readFileSync(filepath);
-      var info = matter(content);
-      return new Item({
-        filename: filepath,
-        src: filepath,
-        content: info.content,
-        data: _.extend({src: filepath}, info.context)
-      });
-    });
-
-    // collection is a convenience for getting items out later
-    var collection = new Collection({items: items});
-
     // generate each list page based on how many items there are
     var pages = {};
     do {
 
       // create a new page from the template with the items in the context
       var page = new Page({
-        filename: generatePagePath(opts.dest, state.currentPageIndex),
+        filename: utils.generatePagePath(opts.dest, state.currentPageIndex),
         content: template,
         context: {
           pagination: {
@@ -132,9 +108,9 @@ module.exports = function(params, done) {
             total_items: state.totalItems,
             total_pages: state.totalPages,
             previous_page: state.prevPageIndex,
-            previous_page_path: generatePagePath(opts.dest, state.prevPageIndex),
+            previous_page_path: utils.generatePagePath(opts.dest, state.prevPageIndex),
             next_page: state.nextPageIndex,
-            next_page_path: generatePagePath(opts.dest, state.nextPageIndex)
+            next_page_path: utils.generatePagePath(opts.dest, state.nextPageIndex)
           }
         }
       });
