@@ -60,8 +60,8 @@ module.exports = function(params, done) {
 
       '<a href="{{page.pagination.previous_page_path}}">Previous</a> | <a href="{{page.pagination.next_page_path}}">Next</a>',
       '{{#each page.pagination.items}}',
-      '<div>{{this.data.src}}</div>',
-      '<div>{{this.data.summary}}</div>',
+      '<div>{{this.metadata.src}}</div>',
+      '<div>{{this.metadata.summary}}</div>',
       '{{/each}}'
 
     ].join('\n');
