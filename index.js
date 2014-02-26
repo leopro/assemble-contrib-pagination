@@ -97,8 +97,9 @@ module.exports = function(params, done) {
     do {
 
       // create a new page from the template with the items in the context
+      var currentPagePath = utils.generatePagePath(opts.dest, state.currentPageIndex);
       var page = new Page({
-        filename: utils.generatePagePath(opts.dest, state.currentPageIndex),
+        filename: currentPagePath,
         content: template,
         context: {
           pagination: {
@@ -108,9 +109,9 @@ module.exports = function(params, done) {
             total_items: state.totalItems,
             total_pages: state.totalPages,
             previous_page: state.prevPageIndex,
-            previous_page_path: utils.generatePagePath(opts.dest, state.prevPageIndex),
+            previous_page_path: utils.relative(currentPagePath, utils.generatePagePath(opts.dest, state.prevPageIndex)),
             next_page: state.nextPageIndex,
-            next_page_path: utils.generatePagePath(opts.dest, state.nextPageIndex)
+            next_page_path: utils.relative(currentPagePath, utils.generatePagePath(opts.dest, state.nextPageIndex))
           }
         }
       });

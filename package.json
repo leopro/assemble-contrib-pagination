@@ -36,6 +36,7 @@
   "dependencies": {
     "gray-matter": "~0.2.8",
     "lodash": "~2.4.1",
-    "fs-utils": "~0.3.6"
+    "fs-utils": "~0.3.6",
+    "relative": "^0.1.2"
   }
 }
